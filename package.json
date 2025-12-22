@@ -1,0 +1,23 @@
+{
+  "name": "projectmanagment",
+  "version": "1.0.0",
+  "description": "a project management application",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "backend",
+    "api",
+    "project",
+    "managment",
+    "app",
+    "nodejs"
+  ],
+  "author": "taha ahmed",
+  "license": "MIT",
+  "devDependencies": {
+    "prettier": "3.7.4"
+  }
+}
