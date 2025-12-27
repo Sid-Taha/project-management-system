@@ -1,5 +1,7 @@
+// src\app.js
 import express from "express"
 import cors from "cors"
+import healthCheckRoutes from "./routes/healthCheck.routes.js"
 
 const app = express()
 
@@ -18,8 +20,10 @@ app.use(cors({
 
 // ------------------------ API
 app.get("/", (req, res)=>{
-  res.end("hello taha")
+  res.end("Welcome to Project management API")
 })
 
+// ------------------------ API Routes
+app.use("/api/v1/health-check", healthCheckRoutes)
 
 export default app

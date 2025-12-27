@@ -1,3 +1,4 @@
+// src\index.js
 import dotenv from "dotenv";
 import app from "./app.js"
 import connectMongoDb from "./db/connection.js"
