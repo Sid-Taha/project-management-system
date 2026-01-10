@@ -2,6 +2,7 @@
 import express from "express"
 import cors from "cors"
 import healthCheckRoutes from "./routes/healthCheck.routes.js"
+import authRouter from "./routes/auth.routes.js"
 
 const app = express()
 
@@ -25,5 +26,6 @@ app.get("/", (req, res)=>{
 
 // ------------------------ API Routes
 app.use("/api/v1/health-check", healthCheckRoutes)
+app.use("/api/v1/auth", authRouter)
 
 export default app
