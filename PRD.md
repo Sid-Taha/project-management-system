@@ -508,6 +508,931 @@ db.notifications.createIndex({ createdAt: -1 })
 ```
 
 **Business Logic**:
+1. Verify user is project admin
+2. Validate updated fields
+3. If name changed, check uniqueness
+4. Update project document
+5. Log changes in activity log
+6. Invalidate cache for this project
+7. Trigger AI re-analysis if significant changes
+8. Return updated project
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Project updated successfully",
+  "data": {
+    "_id": "65f3b1c2d8f9e0g123456789",
+    "name": "Website Redesign 2026 - Q1",
+    "description": "Updated description",
+    "updatedAt": "2026-01-07T10:50:00.000Z"
+  }
+}
+```
+
+### 3.2.5 Delete Project
+
+**Endpoint**: `DELETE /api/v1/projects/:projectId`
+
+**Authentication**: Required
+
+**Authorization**: Admin role only
+
+**Business Logic**:
+1. Verify user is project admin
+2. Soft delete: Set `isArchived: true` and `archivedAt: Date.now()`
+3. Option to hard delete after 30 days in archive
+4. Delete all associated data:
+   - Tasks and subtasks
+   - Notes
+   - Project members
+   - Activity logs (keep audit trail for 90 days)
+5. Remove files from S3
+6. Log deletion activity
+7. Send notification to all members
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Project archived successfully. Will be permanently deleted in 30 days.",
+  "data": {
+    "projectId": "65f3b1c2d8f9e0g123456789",
+    "archivedAt": "2026-01-07T11:00:00.000Z",
+    "permanentDeletionDate": "2026-02-06T11:00:00.000Z"
+  }
+}
+```
+
+---
+
+## 3.3 Team Member Management
+
+### 3.3.1 Add Member to Project
+
+**Endpoint**: `POST /api/v1/projects/:projectId/members`
+
+**Authentication**: Required
+
+**Authorization**: Admin role only
+
+**Request Body**:
+```json
+{
+  "email": "newmember@example.com",
+  "role": "member", // 'admin' | 'project_admin' | 'member'
+  "permissions": {
+    "canCreateTasks": true,
+    "canDeleteTasks": false,
+    "canManageMembers": false,
+    "canViewReports": true
+  }
+}
+```
+
+**Business Logic**:
+1. Verify project exists
+2. Find user by email
+3. If user doesn't exist, send invitation email
+4. Check if user already member
+5. Create ProjectMember document
+6. Send notification to new member
+7. Update project metadata (totalMembers++)
+8. Log activity
+9. Return member details
+
+**Response** (201 Created):
+```json
+{
+  "success": true,
+  "statusCode": 201,
+  "message": "Member added successfully",
+  "data": {
+    "user": {
+      "_id": "65f3c1d2e8f9g0h123456789",
+      "username": "newmember",
+      "email": "newmember@example.com",
+      "fullName": "New Member",
+      "avatar": {
+        "url": "https://cdn.projectcamp.com/avatars/default.png"
+      }
+    },
+    "role": "member",
+    "joinedAt": "2026-01-07T11:05:00.000Z",
+    "invitedBy": {
+      "_id": "65f3a1b2c8e9d0f123456789",
+      "username": "johndoe"
+    }
+  }
+}
+```
+
+### 3.3.2 List Project Members
+
+**Endpoint**: `GET /api/v1/projects/:projectId/members`
+
+**Authentication**: Required
+
+**Authorization**: Any project member
+
+**Query Parameters**:
+```
+?role=admin  // Filter by role
+&search=john // Search by name/username
+```
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Project members fetched successfully",
+  "data": [
+    {
+      "user": {
+        "_id": "65f3a1b2c8e9d0f123456789",
+        "username": "johndoe",
+        "fullName": "John Doe",
+        "email": "john@example.com",
+        "avatar": {
+          "url": "https://cdn.projectcamp.com/avatars/johndoe.jpg"
+        }
+      },
+      "role": "admin",
+      "joinedAt": "2026-01-05T10:45:00.000Z",
+      "permissions": {
+        "canCreateTasks": true,
+        "canDeleteTasks": true,
+        "canManageMembers": true,
+        "canViewReports": true
+      },
+      "stats": {
+        "tasksAssigned": 12,
+        "tasksCompleted": 8,
+        "lastActive": "2026-01-07T10:30:00.000Z"
+      }
+    }
+  ]
+}
+```
+
+### 3.3.3 Update Member Role
+
+**Endpoint**: `PUT /api/v1/projects/:projectId/members/:userId`
+
+**Authentication**: Required
+
+**Authorization**: Admin role only
+
+**Request Body**:
+```json
+{
+  "role": "project_admin",
+  "permissions": {
+    "canCreateTasks": true,
+    "canDeleteTasks": true,
+    "canManageMembers": false,
+    "canViewReports": true
+  }
+}
+```
+
+**Business Logic**:
+1. Verify requester is admin
+2. Prevent removing last admin
+3. Update role and permissions
+4. Send notification to affected user
+5. Log activity
+6. Return updated member
+
+### 3.3.4 Remove Member
+
+**Endpoint**: `DELETE /api/v1/projects/:projectId/members/:userId`
+
+**Authentication**: Required
+
+**Authorization**: Admin role only
+
+**Business Logic**:
+1. Verify requester is admin
+2. Prevent removing last admin
+3. Reassign member's tasks to requester or unassign
+4. Delete ProjectMember document
+5. Update project metadata (totalMembers--)
+6. Send notification to removed member
+7. Log activity
+
+---
+
+## 3.4 Task Management
+
+### 3.4.1 Create Task
+
+**Endpoint**: `POST /api/v1/tasks/:projectId`
+
+**Authentication**: Required
+
+**Authorization**: Admin or Project Admin
+
+**Request Body** (multipart/form-data):
+```json
+{
+  "title": "Design homepage mockup",
+  "description": "Create high-fidelity mockup for new homepage design",
+  "assignedTo": "65f3c1d2e8f9g0h123456789", // User ID
+  "status": "todo",
+  "priority": "high",
+  "dueDate": "2026-01-15T23:59:59.000Z",
+  "estimatedHours": 8,
+  "tags": ["design", "frontend", "urgent"],
+  "attachments": [File, File] // Multipart files
+}
+```
+
+**Business Logic**:
+1. Verify project exists
+2. Verify assignee is project member
+3. Validate due date (future date)
+4. Upload attachments to S3
+5. Generate unique task ID
+6. Create task document
+7. Update project metadata (totalTasks++)
+8. Send notification to assignee
+9. Trigger AI task analysis (priority suggestion, time estimate validation)
+10. Log activity
+11. Return created task
+
+**Response** (201 Created):
+```json
+{
+  "success": true,
+  "statusCode": 201,
+  "message": "Task created successfully",
+  "data": {
+    "_id": "65f3d1e2f8g9h0i123456789",
+    "title": "Design homepage mockup",
+    "description": "Create high-fidelity mockup for new homepage design",
+    "project": "65f3b1c2d8f9e0g123456789",
+    "assignedTo": {
+      "_id": "65f3c1d2e8f9g0h123456789",
+      "username": "designer",
+      "fullName": "Jane Designer",
+      "avatar": {
+        "url": "https://cdn.projectcamp.com/avatars/designer.jpg"
+      }
+    },
+    "assignedBy": {
+      "_id": "65f3a1b2c8e9d0f123456789",
+      "username": "johndoe"
+    },
+    "status": "todo",
+    "priority": "high",
+    "dueDate": "2026-01-15T23:59:59.000Z",
+    "estimatedHours": 8,
+    "actualHours": 0,
+    "tags": ["design", "frontend", "urgent"],
+    "attachments": [
+      {
+        "url": "https://cdn.projectcamp.com/files/task-65f3d1e2/reference.pdf",
+        "filename": "design-reference.pdf",
+        "mimetype": "application/pdf",
+        "size": 2458624,
+        "uploadedAt": "2026-01-07T11:15:00.000Z"
+      }
+    ],
+    "aiSuggestions": {
+      "recommendedAssignee": "65f3c1d2e8f9g0h123456789",
+      "estimatedCompletion": "2026-01-14T17:00:00.000Z",
+      "riskFactors": ["Tight deadline", "Dependencies on design system"]
+    },
+    "createdAt": "2026-01-07T11:15:00.000Z"
+  }
+}
+```
+
+**File Upload Specifications**:
+- Max file size: 50MB per file
+- Max files per task: 10
+- Allowed types: PDF, images (jpg, png, gif), docs (docx, xlsx), archives (zip)
+- Storage: AWS S3 with CDN
+- Naming: `task-{taskId}/{timestamp}-{originalname}`
+
+### 3.4.2 List Tasks
+
+**Endpoint**: `GET /api/v1/tasks/:projectId`
+
+**Authentication**: Required
+
+**Authorization**: Any project member
+
+**Query Parameters**:
+```
+?status=in_progress         // Filter by status
+&priority=high              // Filter by priority
+&assignedTo=userId          // Filter by assignee
+&tags=design,frontend       // Filter by tags (comma-separated)
+&search=homepage            // Search in title/description
+&dueDate[gte]=2026-01-10    // Due date >= 
+&dueDate[lte]=2026-01-20    // Due date <=
+&sort=-createdAt            // Sort: -createdAt, dueDate, priority
+&page=1
+&limit=20
+```
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Tasks fetched successfully",
+  "data": {
+    "tasks": [
+      {
+        "_id": "65f3d1e2f8g9h0i123456789",
+        "title": "Design homepage mockup",
+        "description": "Create high-fidelity mockup",
+        "status": "in_progress",
+        "priority": "high",
+        "dueDate": "2026-01-15T23:59:59.000Z",
+        "assignedTo": {
+          "_id": "65f3c1d2e8f9g0h123456789",
+          "username": "designer",
+          "avatar": {
+            "url": "https://cdn.projectcamp.com/avatars/designer.jpg"
+          }
+        },
+        "tags": ["design", "frontend"],
+        "subtasksCount": 3,
+        "subtasksCompleted": 1,
+        "commentsCount": 5,
+        "attachmentsCount": 2,
+        "createdAt": "2026-01-07T11:15:00.000Z",
+        "updatedAt": "2026-01-07T14:20:00.000Z"
+      }
+    ],
+    "pagination": {
+      "currentPage": 1,
+      "totalPages": 5,
+      "totalTasks": 87,
+      "hasNextPage": true
+    },
+    "summary": {
+      "total": 87,
+      "byStatus": {
+        "todo": 32,
+        "in_progress": 28,
+        "done": 27
+      },
+      "byPriority": {
+        "low": 15,
+        "medium": 42,
+        "high": 23,
+        "critical": 7
+      },
+      "overdue": 5
+    }
+  }
+}
+```
+
+**Performance Optimization**:
+- Cache task lists for 30 seconds
+- Use compound indexes for filtering
+- Paginate large result sets
+
+### 3.4.3 Get Task Details
+
+**Endpoint**: `GET /api/v1/tasks/:projectId/t/:taskId`
+
+**Authentication**: Required
+
+**Authorization**: Any project member
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Task fetched successfully",
+  "data": {
+    "_id": "65f3d1e2f8g9h0i123456789",
+    "title": "Design homepage mockup",
+    "description": "Create high-fidelity mockup for new homepage design with modern aesthetics",
+    "project": {
+      "_id": "65f3b1c2d8f9e0g123456789",
+      "name": "Website Redesign 2026"
+    },
+    "assignedTo": {
+      "_id": "65f3c1d2e8f9g0h123456789",
+      "username": "designer",
+      "fullName": "Jane Designer",
+      "avatar": {
+        "url": "https://cdn.projectcamp.com/avatars/designer.jpg"
+      }
+    },
+    "assignedBy": {
+      "_id": "65f3a1b2c8e9d0f123456789",
+      "username": "johndoe",
+      "fullName": "John Doe"
+    },
+    "status": "in_progress",
+    "priority": "high",
+    "dueDate": "2026-01-15T23:59:59.000Z",
+    "estimatedHours": 8,
+    "actualHours": 4.5,
+    "tags": ["design", "frontend", "urgent"],
+    "attachments": [
+      {
+        "url": "https://cdn.projectcamp.com/files/task-65f3d1e2/reference.pdf",
+        "filename": "design-reference.pdf",
+        "mimetype": "application/pdf",
+        "size": 2458624,
+        "uploadedAt": "2026-01-07T11:15:00.000Z",
+        "uploadedBy": {
+          "_id": "65f3a1b2c8e9d0f123456789",
+          "username": "johndoe"
+        }
+      }
+    ],
+    "subtasks": [
+      {
+        "_id": "65f3e1f2g8h9i0j123456789",
+        "title": "Research competitor designs",
+        "isCompleted": true,
+        "completedAt": "2026-01-07T13:00:00.000Z",
+        "createdBy": {
+          "_id": "65f3c1d2e8f9g0h123456789",
+          "username": "designer"
+        }
+      },
+      {
+        "_id": "65f3e1f2g8h9i0j123456790",
+        "title": "Create wireframes",
+        "isCompleted": false,
+        "createdBy": {
+          "_id": "65f3c1d2e8f9g0h123456789",
+          "username": "designer"
+        }
+      }
+    ],
+    "comments": [
+      {
+        "user": {
+          "_id": "65f3a1b2c8e9d0f123456789",
+          "username": "johndoe",
+          "avatar": {
+            "url": "https://cdn.projectcamp.com/avatars/johndoe.jpg"
+          }
+        },
+        "content": "Please focus on mobile-first design",
+        "createdAt": "2026-01-07T12:30:00.000Z",
+        "isEdited": false
+      }
+    ],
+    "watchers": ["65f3a1b2c8e9d0f123456789", "65f3c1d2e8f9g0h123456789"],
+    "aiSuggestions": {
+      "recommendedAssignee": "65f3c1d2e8f9g0h123456789",
+      "estimatedCompletion": "2026-01-14T17:00:00.000Z",
+      "riskFactors": ["Tight deadline", "Dependencies on design system"]
+    },
+    "createdAt": "2026-01-07T11:15:00.000Z",
+    "updatedAt": "2026-01-07T14:20:00.000Z"
+  }
+}
+```
+
+### 3.4.4 Update Task
+
+**Endpoint**: `PUT /api/v1/tasks/:projectId/t/:taskId`
+
+**Authentication**: Required
+
+**Authorization**: Admin, Project Admin, or task assignee
+
+**Request Body** (multipart/form-data):
+```json
+{
+  "title": "Updated title",
+  "status": "in_progress",
+  "priority": "critical",
+  "assignedTo": "newUserId",
+  "actualHours": 5,
+  "attachments": [File] // Additional files
+}
+```
+
+**Business Logic**:
+1. Verify permissions
+2. Upload new attachments
+3. Update fields
+4. If status changed to 'done':
+   - Set completedAt timestamp
+   - Update project metadata
+   - Trigger completion notification
+5. If assignee changed:
+   - Notify new assignee
+   - Log reassignment
+6. Invalidate cache
+7. Return updated task
+
+### 3.4.5 Delete Task
+
+**Endpoint**: `DELETE /api/v1/tasks/:projectId/t/:taskId`
+
+**Authentication**: Required
+
+**Authorization**: Admin or Project Admin only
+
+**Business Logic**:
+1. Verify permissions
+2. Delete all subtasks
+3. Delete all comments
+4. Delete files from S3
+5. Delete task document
+6. Update project metadata (totalTasks--)
+7. Log deletion
+8. Return confirmation
+
+---
+
+## 3.5 Subtask Management
+
+### 3.5.1 Create Subtask
+
+**Endpoint**: `POST /api/v1/tasks/:projectId/t/:taskId/subtasks`
+
+**Authentication**: Required
+
+**Authorization**: Admin, Project Admin
+
+**Request Body**:
+```json
+{
+  "title": "Review color palette options",
+  "order": 1
+}
+```
+
+**Response** (201 Created):
+```json
+{
+  "success": true,
+  "statusCode": 201,
+  "message": "Subtask created successfully",
+  "data": {
+    "_id": "65f3f1g2h8i9j0k123456789",
+    "title": "Review color palette options",
+    "task": "65f3d1e2f8g9h0i123456789",
+    "isCompleted": false,
+    "order": 1,
+    "createdBy": {
+      "_id": "65f3a1b2c8e9d0f123456789",
+      "username": "johndoe"
+    },
+    "createdAt": "2026-01-07T15:00:00.000Z"
+  }
+}
+```
+
+### 3.5.2 Update Subtask
+
+**Endpoint**: `PUT /api/v1/tasks/:projectId/st/:subTaskId`
+
+**Authentication**: Required
+
+**Authorization**: Any project member (to toggle completion), Admin/Project Admin (to edit)
+
+**Request Body**:
+```json
+{
+  "title": "Updated subtask title",
+  "isCompleted": true
+}
+```
+
+**Business Logic**:
+1. If toggling completion:
+   - Allow any project member
+   - Set completedBy and completedAt
+   - Recalculate parent task progress
+2. If editing title/order:
+   - Require Admin/Project Admin
+3. Return updated subtask
+
+### 3.5.3 Delete Subtask
+
+**Endpoint**: `DELETE /api/v1/tasks/:projectId/st/:subTaskId`
+
+**Authentication**: Required
+
+**Authorization**: Admin or Project Admin only
+
+---
+
+## 3.6 Project Notes
+
+### 3.6.1 Create Note
+
+**Endpoint**: `POST /api/v1/notes/:projectId`
+
+**Authentication**: Required
+
+**Authorization**: Admin only
+
+**Request Body**:
+```json
+{
+  "title": "Meeting Notes - Jan 7",
+  "content": "## Key Decisions\n\n- Approved new color scheme\n- Delayed mobile launch to Q2",
+  "tags": ["meeting", "decisions"],
+  "isPinned": false
+}
+```
+
+**Response** (201 Created):
+```json
+{
+  "success": true,
+  "statusCode": 201,
+  "message": "Note created successfully",
+  "data": {
+    "_id": "65f3g1h2i8j9k0l123456789",
+    "title": "Meeting Notes - Jan 7",
+    "content": "## Key Decisions\n\n- Approved new color scheme",
+    "project": "65f3b1c2d8f9e0g123456789",
+    "createdBy": {
+      "_id": "65f3a1b2c8e9d0f123456789",
+      "username": "johndoe",
+      "fullName": "John Doe"
+    },
+    "tags": ["meeting", "decisions"],
+    "isPinned": false,
+    "version": 1,
+    "createdAt": "2026-01-07T16:00:00.000Z"
+  }
+}
+```
+
+### 3.6.2 List Notes
+
+**Endpoint**: `GET /api/v1/notes/:projectId`
+
+**Query Parameters**:
+```
+?search=meeting
+&tags=decisions
+&pinned=true
+&sort=-createdAt
+```
+
+### 3.6.3 Update Note
+
+**Endpoint**: `PUT /api/v1/notes/:projectId/n/:noteId`
+
+**Business Logic**:
+1. Save current version to versionHistory
+2. Increment version number
+3. Update content and lastEditedBy
+4. Return updated note with version info
+
+### 3.6.4 Delete Note
+
+**Endpoint**: `DELETE /api/v1/notes/:projectId/n/:noteId`
+
+---
+
+# 4. AI ASSISTANT FEATURES
+
+## 4.1 AI Architecture
+
+### 4.1.1 Core Components
+
+```
+┌─────────────────────────────────────────┐
+│         AI Service Layer                │
+│                                         │
+│  ┌───────────────────────────────────┐ │
+│  │  Context Manager                  │ │
+│  │  - User preferences              │ │
+│  │  - Project data                  │ │
+│  │  - Conversation history          │ │
+│  └───────────────────────────────────┘ │
+│                                         │
+│  ┌───────────────────────────────────┐ │
+│  │  AI Capabilities                 │ │
+│  │  - Task Generation               │ │
+│  │  - Smart Assignment              │ │
+│  │  - Risk Analysis                 │ │
+│  │  - Timeline Prediction           │ │
+│  │  - Natural Language Chat         │ │
+│  └───────────────────────────────────┘ │
+│                                         │
+│  ┌───────────────────────────────────┐ │
+│  │  LLM Integration                 │ │
+│  │  - OpenAI GPT-4 Turbo            │ │
+│  │  - Anthropic Claude (fallback)   │ │
+│  │  - Local model (future)          │ │
+│  └───────────────────────────────────┘ │
+└─────────────────────────────────────────┘
+```
+
+### 4.1.2 AI Features Matrix
+
+| Feature | Description | User Benefit | API Endpoint |
+|---------|-------------|--------------|--------------|
+| **Task Suggestions** | Generate relevant tasks based on project context | Reduces planning time by 60% | `POST /api/v1/ai/suggest-tasks/:projectId` |
+| **Smart Assignment** | Recommend best team member for task | Optimal resource allocation | `POST /api/v1/ai/assign-task/:taskId` |
+| **Risk Detection** | Identify project risks automatically | Proactive problem-solving | `GET /api/v1/ai/analyze-risks/:projectId` |
+| **Timeline Prediction** | Forecast project completion date | Accurate deadline planning | `GET /api/v1/ai/predict-timeline/:projectId` |
+| **Workload Balance** | Suggest task redistribution | Prevent burnout | `GET /api/v1/ai/balance-workload/:projectId` |
+| **Natural Chat** | Conversational assistant | Intuitive interaction | `POST /api/v1/ai/chat` (WebSocket) |
+| **Auto-Prioritization** | Suggest task priorities | Focus on what matters | `POST /api/v1/ai/prioritize/:taskId` |
+| **Meeting Summary** | Generate action items from notes | Save post-meeting time | `POST /api/v1/ai/summarize-meeting` |
+
+## 4.2 AI Endpoint Specifications
+
+### 4.2.1 Generate Task Suggestions
+
+**Endpoint**: `POST /api/v1/ai/suggest-tasks/:projectId`
+
+**Request Body**:
+```json
+{
+  "context": "We're building a mobile app for fitness tracking",
+  "count": 5,
+  "includeSubtasks": true
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Task suggestions generated",
+  "data": {
+    "suggestions": [
+      {
+        "title": "Design user onboarding flow",
+        "description": "Create wireframes and mockups for the app onboarding experience, including sign-up, profile setup, and goal selection",
+        "priority": "high",
+        "estimatedHours": 12,
+        "recommendedAssignee": {
+          "_id": "65f3c1d2e8f9g0h123456789",
+          "username": "designer",
+          "reasoning": "Has experience with mobile UX and completed similar onboarding designs"
+        },
+        "suggestedTags": ["design", "mobile", "ux"],
+        "subtasks": [
+          "Research competitor onboarding flows",
+          "Create user journey map",
+          "Design wireframes",
+          "Create high-fidelity mockups"
+        ],
+        "dependencies": []
+      },
+      {
+        "title": "Set up Firebase authentication",
+        "description": "Implement user authentication using Firebase Auth with email/password and social login options",
+        "priority": "critical",
+        "estimatedHours": 8,
+        "recommendedAssignee": {
+          "_id": "65f3d1e2f8g9h0i123456790",
+          "username": "backend_dev",
+          "reasoning": "Backend specialist with Firebase experience"
+        },
+        "suggestedTags": ["backend", "authentication", "firebase"],
+        "subtasks": [
+          "Configure Firebase project",
+          "Implement email/password auth",
+          "Add Google Sign-In",
+          "Add Apple Sign-In"
+        ],
+        "dependencies": []
+      }
+    ],
+    "reasoning": "Based on typical fitness app development patterns and your team's skill distribution, these tasks form a solid foundation for your MVP",
+    "estimatedTotalTime": "48 hours",
+    "confidence": 0.87,
+    "metadata": {
+      "model": "gpt-4-turbo-2024-04-09",
+      "tokensUsed": 1250,
+      "processingTime": 3200
+    }
+  }
+}
+```
+
+### 4.2.2 Smart Task Assignment
+
+**Endpoint**: `POST /api/v1/ai/assign-task/:taskId`
+
+**Request Body**:
+```json
+{
+  "considerWorkload": true,
+  "considerSkills": true,
+  "considerAvailability": true
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Assignment recommendation generated",
+  "data": {
+    "recommendations": [
+      {
+        "user": {
+          "_id": "65f3c1d2e8f9g0h123456789",
+          "username": "designer",
+          "fullName": "Jane Designer"
+        },
+        "score": 0.92,
+        "reasoning": [
+          "Has completed 15 similar design tasks with 95% on-time rate",
+          "Current workload: 2 tasks (below team average of 3.5)",
+          "Available: Full capacity this week",
+          "Skills match: UI/UX Design, Figma, Mobile Design"
+        ],
+        "estimatedCompletionDate": "2026-01-12T17:00:00.000Z",
+        "riskFactors": []
+      },
+      {
+        "user": {
+          "_id": "65f3e1f2g8h9i0j123456791",
+          "username": "designer2",
+          "fullName": "Bob Designer"
+        },
+        "score": 0.78,
+        "reasoning": [
+          "Has completed 8 similar tasks with 85% on-time rate",
+          "Current workload: 4 tasks (above team average)",
+          "Available: Limited capacity due to other priorities",
+          "Skills match: UI/UX Design, Adobe XD"
+        ],
+        "estimatedCompletionDate": "2026-01-14T17:00:00.000Z",
+        "riskFactors": ["High workload may delay delivery"]
+      }
+    ],
+    "metadata": {
+      "analyzedMembers": 5,
+      "model": "gpt-4-turbo-2024-04-09"
+    }
+  }
+}
+```
+
+### 4.2.3 Project Risk Analysis
+
+**Endpoint**: `GET /api/v1/ai/analyze-risks/:projectId`
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Risk analysis completed",
+  "data": {
+    "overallRisk": "medium",
+    "healthScore": 72,
+    "risks": [
+      {
+        "category": "schedule",
+        "severity": "high",
+        "title": "5 tasks overdue by 3+ days",
+        "description": "Multiple tasks have missed their deadlines, potentially impacting the overall project timeline",
+        "affectedTasks": [
+          {
+            "_id": "65f3d1e2f8g9h0i123456789",
+            "title": "API integration",
+            "daysOverdue": 5
+          }
+        ],
+        "recommendations": [
+          "Reassign 2 overdue tasks to available team members",
+          "Consider extending project timeline by 1 week",
+          "Schedule daily standup to track progress"
+        ],
+        "impact": "Could delay launch by 1-2 weeks"
+      },
+      {
+        "category": "resource",
+        "severity": "medium",
+        "title": "Workload imbalance detected",
+        "description": "2 team members have 60% more tasks than the team average",
+        "affectedMembers": [
+          {
+            "username": "developer1",
+            "currentTasks": 8,
+            "teamAverage": 5
+          }
+        **:
 1. Validate email format (RFC 5322 compliant)
 2. Validate username (3-30 chars, alphanumeric + underscore)
 3. Validate password strength:

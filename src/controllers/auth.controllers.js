@@ -1,7 +1,8 @@
-import { ApiResponse } from "../utils/api-response"
-import { asyncHandler } from "../utils/async-handler"
-import {ApiError} from "../utils/api-error"
-import {userTable} from "../models/user.models"
+import { ApiResponse } from "../utils/api-response.js"
+import { asyncHandler } from "../utils/async-handler.js"
+import {ApiError} from "../utils/api-error.js"
+import {userTable} from "../models/user.models.js"
+import {sendEmail, emailVerificationMailgenContent} from "../utils/mail.js"
 
 
 const registerUser = asyncHandler(async (req, res) => {
@@ -27,13 +28,13 @@ const registerUser = asyncHandler(async (req, res) => {
         isEmailVerified: false,
     })
 
-    // create temporary token for email verification 
+    // create temporary token for email verification for 20 mints
     const {unHashedToken, hashedToken, tokenExpiry} = newUser.generateTemporaryToken()
 
-    newUser.emailVerificationToken = hashedToken
-    newUser.emailVerificationTokenExpiry = tokenExpiry
+    newUser.emailVerificationToken = hashedToken // save hashed token in database
+    newUser.emailVerificationTokenExpiry = tokenExpiry // 20 minutes from now
     
-    await newUser.save({validateBeforeSave: false})
+    await newUser.save({validateBeforeSave: false}) // saving user without running validation again
 
     // sending Email
     await sendEmail({
@@ -46,7 +47,7 @@ const registerUser = asyncHandler(async (req, res) => {
     })
 
     // excluding fields from database
-    const createdUser = await newUser.findById(newUser._id).select("-password -refreshToken -emailVerificationToken -emailVerificationTokenExpiry")
+    const createdUser = await userTable.findById(newUser._id).select("-password -refreshToken -emailVerificationToken -emailVerificationTokenExpiry")
 
     // if user creation failed
     if(!createdUser){

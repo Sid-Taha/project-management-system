@@ -56,18 +56,28 @@ const userSchema = new Schema({
 
 
 
-// -------------------------------- Pre Hooks -------------------------------- //
-userSchema.pre("save", async function(next){
-    if(!this.isModified("password")){
-        // if password is not modified, move to the next middleware
-        return next()
-    }else{
-        // hash the password
-        await bcrypt.hash(this.password, 10)
-        next()
-    } 
-})
+// // -------------------------------- Pre Hooks -------------------------------- //
+// userSchema.pre("save", async function(next){
+//     if(!this.isModified("password")){
+//         // if password is not modified, move to the next middleware
+//         return next()
+//     }else{
+//         // hash the password
+//         await bcrypt.hash(this.password, 10)
+//         next()
+//     } 
+// })
 
+
+// -------------------------------- Pre Hooks -------------------------------- //
+// 1. Remove 'next' from the arguments
+userSchema.pre("save", async function() { 
+    if(!this.isModified("password")){
+        return; 
+    }
+
+    this.password = await bcrypt.hash(this.password, 10);
+})
 
 
 // -------------------------------- Methods -------------------------------- //
