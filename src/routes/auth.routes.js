@@ -1,6 +1,6 @@
 // src\routes\auth.routes.js
 import express from "express"
-import {registerUser, login}  from "../controllers/auth.controllers.js"
+import {registerUser, login, verifyEmail}  from "../controllers/auth.controllers.js"
 
 const router = express.Router()
 
@@ -8,6 +8,8 @@ const router = express.Router()
 router.route("/register").post(registerUser) // user registration route
 
 router.route("/login").post(login) // user registration route
+
+router.route("/verify-email/:verificationToken").get(verifyEmail) // email verification route
 
 
 export default router
