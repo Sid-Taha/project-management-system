@@ -3,8 +3,12 @@ import express from "express"
 import cors from "cors"
 import healthCheckRoutes from "./routes/healthCheck.routes.js"
 import authRouter from "./routes/auth.routes.js"
+import cookieParser from "cookie-parser";
 
 const app = express()
+
+// ------------------------ Cookie Parser
+app.use(cookieParser());
 
 // ------------------------ Middleware
 app.use(express.json({limit: "16kb"})) // to make readable clients json.body

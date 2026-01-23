@@ -43,7 +43,7 @@ const registerUser = asyncHandler(async (req, res) => {
         subject: "Please verify your email",
         mailgenContent: emailVerificationMailgenContent(
             newUser.username,
-            `${req.protocol}://${req.get("host")}/api/v1/users/verify-email/${unHashedToken}`
+            `${req.protocol}://${req.get("host")}/api/v1/auth/verify-email/${unHashedToken}`
         )
     })
 
@@ -163,7 +163,87 @@ const verifyEmail = asyncHandler(async (req, res) => {
 
 
 
-export {registerUser, login, verifyEmail}
+
+const logoutUser = asyncHandler(async (req, res) => {
+    // clear refresh token from database
+    await userTable.findByIdAndUpdate(
+    req.user._id, 
+    {
+        $set: {refreshToken: ""}
+    },
+    {
+        new: true,
+    })
+
+    // option to clear cookies
+    const options = {
+        httpOnly: true,
+        secure: true,
+    }
+
+    // send response to client
+    return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(
+        new ApiResponse(200, null, "User logged out successfully")
+    )
+});
+
+
+
+
+const resendEmailVerification = asyncHandler(async (req, res) => {
+    // find user from database with the help of req.user set in verifyJWT middleware
+    const user = await userTable.findById(req.user._id)
+
+    // if user not found, throw error
+    if(!user){
+        throw new ApiError(404, "User not found")
+    }
+
+    // if email is already verified, throw error
+    if(user.isEmailVerified){
+        throw new ApiError(400, "Email is already verified")
+    }
+
+    // create temporary token for email verification for 20 mints
+    const {unHashedToken, hashedToken, tokenExpiry} = user.generateTemporaryToken()
+
+    user.emailVerificationToken = hashedToken // save hashed token in database
+    user.emailVerificationTokenExpiry = tokenExpiry // 20 minutes from now
+
+    await user.save({validateBeforeSave: false}) // saving user without running validation again
+
+    // sending Email
+    await sendEmail({
+        email: user.email,
+        subject: "Please verify your email",
+        mailgenContent: emailVerificationMailgenContent(
+            user.username,
+            `${req.protocol}://${req.get("host")}/api/v1/auth/verify-email/${unHashedToken}`
+        )
+    })
+
+    // send response to client
+    return res.status(200).json(
+        new ApiResponse(200, null, "Verification email resent successfully, please check your inbox")
+    )
+});
+
+
+
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+    // send response to client with current logged in user details from req.user set in verifyJWT middleware
+    return res.status(200).json(
+        new ApiResponse(200, {user: req.user}, "Current user fetched successfully")
+    )
+});
+
+
+export {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser}
 
 
 
