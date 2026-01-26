@@ -10,7 +10,7 @@ router.route("/register").post(registerUser) // user registration route
 
 router.route("/verify-email/:verificationToken").get(verifyEmail) // email verification route
 
-router.route("/resend-email-verification").get(verifyJWT, resendEmailVerification) // resend email verification route
+router.route("/resend-email-verification").get(resendEmailVerification) // resend email verification route
 
 router.route("/login").post(login) // user login route
 
