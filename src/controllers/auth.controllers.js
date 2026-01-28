@@ -246,7 +246,59 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 });
 
 
-export {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser}
+const refreshAccessToken = asyncHandler(async (req, res) => {
+    // get refresh token from cookies
+    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+
+    // if refresh token is not present, throw error
+    if(!incomingRefreshToken){
+        throw new ApiError(400, "Refresh token is missing")
+    }
+
+    try {
+        // verify the incoming refresh token from client to get _id
+        const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
+
+        // find user from database
+        const user = await userTable.findById(decodedToken._id)
+
+        // if user not found, throw error
+        if(!user){
+            throw new ApiError(404, "User not found")
+        }
+
+        // check if the incoming refresh token of client matches the one in database
+        if(user.refreshToken !== incomingRefreshToken){
+            throw new ApiError(401, "Invalid refresh token")
+        }
+
+        // generate new access token
+        const newAccessToken = user.generateAccessToken()
+
+        // setting cookies options
+        const options = {
+            httpOnly: true,
+            secure: true
+        }
+
+        // send response to client with new access token
+        return res
+        .status(200)
+        .cookie("accessToken", newAccessToken, options) 
+        .json(
+            new ApiResponse(200, {accessToken: newAccessToken}, "Access token refreshed successfully")
+        )
+
+
+    } catch (error) {
+        throw new ApiError(401, "Invalid or expired refresh token")
+    }
+});
+
+
+
+
+export {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken}
 
 
 
