@@ -1,6 +1,6 @@
 // src\routes\auth.routes.js
 import express from "express"
-import {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken}  from "../controllers/auth.controllers.js"
+import {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken, forgetPasswordRequest}  from "../controllers/auth.controllers.js"
 import {verifyJWT} from "../middlewares/auth.middleware.js"
 
 const router = express.Router()
@@ -19,6 +19,8 @@ router.route("/logout").post(verifyJWT, logoutUser) // user logout route
 router.route("/current-user").post(verifyJWT, getCurrentUser) // get current logged in user route
 
 router.route("/refresh-token").post(refreshAccessToken) // refresh access token route
+
+router.route("/forget-password").post(forgetPasswordRequest) // forget password route
 
 
 

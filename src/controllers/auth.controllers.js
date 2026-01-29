@@ -4,6 +4,7 @@ import {ApiError} from "../utils/api-error.js"
 import {userTable} from "../models/user.models.js"
 import {sendEmail, emailVerificationMailgenContent} from "../utils/mail.js"
 import crypto from "crypto"
+import jwt from "jsonwebtoken"
 
 
 const registerUser = asyncHandler(async (req, res) => {
@@ -92,6 +93,10 @@ const login = asyncHandler(async (req, res) => {
     // generate access token and refresh token
     const accessToken = existingUser.generateAccessToken()
     const refreshToken = existingUser.generateRefreshToken()
+
+    // save refresh token in database
+    existingUser.refreshToken = refreshToken
+    await existingUser.save({validateBeforeSave: false})
 
     // setting cookies options
     const options = {
@@ -258,15 +263,17 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     try {
         // verify the incoming refresh token from client to get _id
         const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
+        console.log("🚀 ~ decodedToken:", decodedToken)
 
         // find user from database
         const user = await userTable.findById(decodedToken._id)
+        console.log("🚀 ~ user:", user)
 
         // if user not found, throw error
         if(!user){
             throw new ApiError(404, "User not found")
         }
-
+        
         // check if the incoming refresh token of client matches the one in database
         if(user.refreshToken !== incomingRefreshToken){
             throw new ApiError(401, "Invalid refresh token")
@@ -274,6 +281,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
         // generate new access token
         const newAccessToken = user.generateAccessToken()
+        console.log("🚀 ~ newAccessToken:", newAccessToken)
 
         // setting cookies options
         const options = {
@@ -298,7 +306,50 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
 
 
-export {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken}
+const forgetPasswordRequest = asyncHandler(async (req, res) => {
+    // getting email from req.body
+    const {email} = req.body
+
+    // find user from database with the help of email
+    const user = await userTable.findOne({email})
+
+    // turn isEmailVerified false
+    user.isEmailVerified = false
+    await user.save({validateBeforeSave: false})
+
+    // if user not found, throw error
+    if(!user){
+        throw new ApiError(404, "User not found")
+    }
+
+    // create temporary token for email verification for 20 mints
+    const {unHashedToken, hashedToken, tokenExpiry} = user.generateTemporaryToken()
+
+    user.emailVerificationToken = hashedToken // save hashed token in database
+    user.emailVerificationTokenExpiry = tokenExpiry // 20 minutes from now
+    
+    await user.save({validateBeforeSave: false}) // saving user without running validation again
+
+    // sending Email
+    await sendEmail({
+        email: user.email,
+        subject: "Please verify your email",
+        mailgenContent: emailVerificationMailgenContent(
+            user.username,
+            `${req.protocol}://${req.get("host")}/api/v1/auth/verify-email/${unHashedToken}`
+        )
+    })
+
+    // send response to client
+    return res.status(200).json(
+        new ApiResponse(200, null, "Password reset email sent successfully, please check your inbox")
+    )
+});
+
+
+
+
+export {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken, forgetPasswordRequest}
 
 
 
