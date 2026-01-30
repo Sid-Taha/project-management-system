@@ -313,10 +313,6 @@ const forgetPasswordRequest = asyncHandler(async (req, res) => {
     // find user from database with the help of email
     const user = await userTable.findOne({email})
 
-    // turn isEmailVerified false
-    user.isEmailVerified = false
-    await user.save({validateBeforeSave: false})
-
     // if user not found, throw error
     if(!user){
         throw new ApiError(404, "User not found")
@@ -327,7 +323,6 @@ const forgetPasswordRequest = asyncHandler(async (req, res) => {
 
     user.emailVerificationToken = hashedToken // save hashed token in database
     user.emailVerificationTokenExpiry = tokenExpiry // 20 minutes from now
-    
     await user.save({validateBeforeSave: false}) // saving user without running validation again
 
     // sending Email
@@ -336,7 +331,7 @@ const forgetPasswordRequest = asyncHandler(async (req, res) => {
         subject: "Please verify your email",
         mailgenContent: emailVerificationMailgenContent(
             user.username,
-            `${req.protocol}://${req.get("host")}/api/v1/auth/verify-email/${unHashedToken}`
+            `${req.protocol}://${req.get("host")}/api/v1/auth/reset-password/${unHashedToken}`
         )
     })
 
@@ -348,8 +343,51 @@ const forgetPasswordRequest = asyncHandler(async (req, res) => {
 
 
 
+const resetForgotPassword = asyncHandler(async (req, res) => {
+    // getting reset token from params/url
+    console.log("✅");
+    
+    const {resetToken} =  req.params // resetToken = unHashedToken
 
-export {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken, forgetPasswordRequest}
+    const newPassword = "thisIsNewPassword123" // req.body
+
+    // if token is not present, throw error
+    if(!resetToken){
+        throw new ApiError(400, "Reset token is missing")
+    }
+
+    // hash the received token to compare with database
+    const hashedToken = crypto
+        .createHash('sha256')
+        .update(resetToken)
+        .digest('hex');
+
+    // find user with the hashed token and check if token is not expired
+    const user = await userTable.findOne({
+        emailVerificationToken: hashedToken,
+        emailVerificationTokenExpiry: {$gt: Date.now()}
+    })
+
+    // if user not found, throw error
+    if(!user){
+        throw new ApiError(400, "Invalid or expired reset token")
+    }
+
+    // update user's password
+    user.password = newPassword // set new password
+    user.emailVerificationToken = undefined
+    user.emailVerificationTokenExpiry = undefined // 20 minutes time
+    await user.save({validateBeforeSave: false})
+
+    // send response to client
+    return res.status(200).json(
+        new ApiResponse(200, null, "Password reset successfully")
+    )
+});
+
+
+
+export {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken, forgetPasswordRequest, resetForgotPassword}
 
 
 
