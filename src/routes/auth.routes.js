@@ -28,8 +28,4 @@ router.route("/change-password").post(verifyJWT, changeCurrentPassword) // chang
 
 
 
-
-
-
-
 export default router
