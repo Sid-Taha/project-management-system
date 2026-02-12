@@ -18,6 +18,3 @@ connectMongoDb(process.env.MONGODB_URL)
   console.log("❌ Failed to connect to MongoDB. Exiting...");
   process.exit(1);
 })
-
-
-

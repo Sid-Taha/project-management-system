@@ -49,3 +49,23 @@ export const createProject = asyncHandler(async (req, res) => {
     // response to client
     res.status(201).json(new ApiResponse(201, "Project created successfully", project));
 })
+
+
+
+
+export const listMyProjects = asyncHandler(async (req, res) => {
+    // finding all projects on behalf of user ID
+    const membership = await projectMember.find({user: req.user._id}).populate("project").sort({createdAt: -1})
+
+    // modified membership array to get only 2 properties of project & role
+    const projects = membership
+        .filter((m)=>(m.project && !m.project.isArchived))
+        .map((m)=>({
+            project: m.project,
+            role: m.role
+        }))
+
+    // response back to client
+    return res.status(200).json(new ApiResponse(200, {projects}, " projects fetched successfully") )
+
+})
