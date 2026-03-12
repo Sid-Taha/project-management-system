@@ -25,7 +25,7 @@ export const requireProjectMember = async (req, res, next) => {
 
 
 // you are an admin
-export const requireProjectAdmin = () => {
+export const requireProjectAdmin = (req, res, next) => {
     // is user is also part of this project
     if(!req.membership){
         throw new ApiError(403, "You are not a member of this project")

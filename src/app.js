@@ -6,6 +6,7 @@ import authRouter from "./routes/auth.routes.js"
 import projectRouter from "./routes/projects.routes.js"
 import cookieParser from "cookie-parser";
 import projectMemberRouter from "./routes/projectMembers.routes.js"
+import taskRouter from "./routes/task.routes.js"
 
 const app = express()
 
@@ -35,6 +36,7 @@ app.get("/", (req, res)=>{
 app.use("/api/v1/health-check", healthCheckRoutes)
 app.use("/api/v1/auth", authRouter)
 app.use("/api/v1/project", projectRouter)
-app.use("/api/v1/projects/:projectId/members", projectMemberRouter)
+app.use("/api/v1/projects", projectMemberRouter)
+app.use("/api/v1/tasks", taskRouter)
 
 export default app

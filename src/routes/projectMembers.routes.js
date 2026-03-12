@@ -1,17 +1,27 @@
 // src\routes\projectMembers.routes.js
 import express from "express"
-import {listProjectMember} from "../controllers/projectMembers.controllers.js"
+import {listProjectMember, addProjectMember, updateProjectMember, removeProjectMember} from "../controllers/projectMembers.controllers.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js"
 import { requireProjectMember, requireProjectAdmin } from "../middlewares/project.middleware.js"
   
+
 const router = express.Router()
 
-router.use(verifyJWT) // this will verify the token for all routes in this router
-router.use(requireProjectMember) // this will check if the user is a member of this project
+
+// ---------------------------------------Middlewares
+router.use(verifyJWT) // your are login
 
 
-router.route("/").get(listProjectMember) // list all members of a project
 
-router.route("/").post(requireProjectAdmin ,addProjectMember) // add a member to a project
+// ---------------------------------------API routes
+router.route("/:projectId/members").all(requireProjectMember).get(listProjectMember) // show all members
+
+router.route("/:projectId/members").all(requireProjectMember).post(requireProjectAdmin ,addProjectMember) // add a member
+
+router.route("/:projectId/members/:userId").all(requireProjectMember).put(requireProjectAdmin, updateProjectMember) // Update Member Role / Permissions
+
+router.route("/:projectId/members/:userId").all(requireProjectMember).delete(requireProjectAdmin, removeProjectMember) // remove user from project
+
+
 
 export default router
