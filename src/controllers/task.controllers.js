@@ -51,6 +51,9 @@ export const createTask = asyncHandler(async (req, res) => {
     // Validate status and priority
     const validStatuses = ["todo", "in-progress", "done"]
     const validPriorities = ["low", "medium", "high", "critical"]
+    if(status && !validStatuses.includes(status)) throw new ApiError(400, "Invalid status")
+    if(priority && !validPriorities.includes(priority)) throw new ApiError(400, "Invalid priority")
+
 
     if (status && !validStatuses.includes(status)) {
         throw new ApiError(400, `Invalid status. Valid options are: ${validStatuses.join(", ")}`)
@@ -101,66 +104,104 @@ export const createTask = asyncHandler(async (req, res) => {
 
 
 export const listTask = asyncHandler(async (req, res) => {
-    // get project id from url
-    const {projectId} = req.params
+  const { projectId } = req.params;
 
-    // Verify project exists
-    const project  = await projectTable.findById(projectId)
-    if(!project){
-        throw new ApiError(404, "Project not found")
-    }
+  // Verify project exists
+  const project = await projectTable.findById(projectId);
+  if (!project) throw new ApiError(404, "Project not found");
 
-    // extract query params for filtering
-    const {
-        status,
-        priority,
-        assignedTo,
-        tags,
-        search,
-        sort,
-        page,
-        limit,
-        dueDate
-    } = req.query
+  // Extract query params
+  let {
+    status,
+    priority,
+    assignedTo,
+    tags,
+    search,
+    sort,
+    sortOrder = "desc",
+    page,
+    limit,
+    dueDateGte,
+    dueDateLte,
+  } = req.query;
 
-    // Build filter object based on query params
-    const filter = { project: projectId }
+    
 
-    if (status) filter.status = status
-    if (priority) filter.priority = priority
-    if (assignedTo) filter.assignedTo = assignedTo
-    if (tags) filter.tags = { $all: tags.split(",") }
-    if (search) filter.title = { $regex: search, $options: "i" }
-    if (dueDate) filter.dueDate = { $lte: new Date(dueDate) }
+  // Validate status & priority if provided
+  const validStatuses = ["todo", "in-progress", "done"];
+  const validPriorities = ["low", "medium", "high", "critical"];
 
-    // pagination
-    const pageNum = Math.max(1, parseInt(page) || 1) // default to page 1 if not provided or invalid
-    const limitNum = Math.min(100, parseInt(limit) || 10) // default to 10 items per page, max 100
-    const skip = (pageNum - 1) * limitNum // calculate how many items to skip based on current page and limit
-
-    // sorting
-    const validSort = ["createdAt", "dueDate", "priority", "status"]
-    const sortField = validSort.includes(sort) ? sort : "createdAt" // default to sorting by creation date
-    const sortOrder = sort === "dueDate" ? 1 : -1 // sort by due date in ascending order, others in descending
-
-    // fetch task + total count in parallel
-    const [tasks, totalCount] = await Promise.all([
-        tableTask.find(filter).sort({ [sortField]: sortOrder }).skip(skip).limit(limitNum).exec(),
-        tableTask.countDocuments(filter).exec()
-    ])
-
-    // return response with tasks and pagination info
-    return res.status(200).json(
-        new ApiResponse(200, {
-            tasks,
-            pagination: {
-                total: totalCount,
-                page: pageNum,
-                limit: limitNum,
-                totalPages: Math.ceil(totalCount / limitNum)
-            }
-        }, "Tasks fetched successfully")
-    )
+  if (status && !validStatuses.includes(status)) {
+    throw new ApiError(400, `Invalid status. Valid options: ${validStatuses.join(", ")}`);
+  }
+  if (priority && !validPriorities.includes(priority)) {
+    throw new ApiError(400, `Invalid priority. Valid options: ${validPriorities.join(", ")}`);
+  }
 
 
-})
+  // Build filter object
+  const filter = { project: projectId };
+
+  if (status) filter.status = status;
+  if (priority) filter.priority = priority;
+  if (assignedTo) filter.assignedTo = assignedTo;
+
+  if (tags) {
+    const tagArray = tags.split(",").filter(Boolean);
+    if (tagArray.length) filter.tags = { $all: tagArray };
+  }
+
+  if (search) filter.title = { $regex: search, $options: "i" };
+
+
+
+  if (dueDateGte || dueDateLte) {
+    
+    filter.dueDate = {};
+
+    if (dueDateGte) filter.dueDate.$gte = new Date(dueDateGte);
+    if (dueDateLte) filter.dueDate.$lte = new Date(dueDateLte);
+  } 
+
+
+
+
+
+
+  // Pagination
+  const pageNum = Math.max(1, parseInt(page) || 1);
+  const limitNum = Math.min(100, parseInt(limit) || 10);
+  const skip = (pageNum - 1) * limitNum;
+
+  // Sorting
+  const validSortFields = ["createdAt", "dueDate", "priority", "status"];
+  const sortField = validSortFields.includes(sort) ? sort : "createdAt";
+  const sortDir = sortOrder.toLowerCase() === "asc" ? 1 : -1;
+
+  // Fetch tasks + total count in parallel
+  const [tasks, totalCount] = await Promise.all([
+    
+    tableTask.find(filter)
+      .sort({ [sortField]: sortDir })
+      .skip(skip)
+      .limit(limitNum)
+      .exec(),
+    
+    
+      tableTask.countDocuments(filter).exec(),
+  
+    ]);
+
+  // Return response
+  return res.status(200).json(
+    new ApiResponse(200, {
+      tasks,
+      pagination: {
+        total: totalCount, 
+        page: pageNum,  
+        limit: limitNum, 
+        totalPages: Math.ceil(totalCount / limitNum),
+      },
+    }, "Tasks fetched successfully")
+  );
+});
