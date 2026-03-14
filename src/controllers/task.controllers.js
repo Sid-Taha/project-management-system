@@ -205,3 +205,117 @@ export const listTask = asyncHandler(async (req, res) => {
     }, "Tasks fetched successfully")
   );
 });
+
+
+
+
+
+export const getTaskDetails = asyncHandler(async (req, res) => {
+    const { projectId, taskId } = req.params
+
+    // Verify project exists
+    const project = await projectTable.findById(projectId);
+    if (!project) throw new ApiError(404, "Project not found");
+
+    // Fetch task details
+    const task = await tableTask.findById(taskId).exec();
+    if (!task) throw new ApiError(404, "Task not found");
+
+    // Check if task belongs to the project
+    if (task.project.toString() !== projectId) {
+        throw new ApiError(403, "Access denied");
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, task, "Task details fetched successfully")
+    );
+});
+
+
+
+
+
+export const updateTask = asyncHandler(async (req, res) => {
+  const { projectId, taskId } = req.params
+
+  // Extract task details from request body
+  const {
+  title,
+  description,
+  assignedTo,
+  status,
+  priority,
+  dueDate,
+  actualHours,
+  tags,
+  } = req.body
+
+  // Verify project exists
+  const project = await projectTable.findById(projectId);
+  if (!project) throw new ApiError(404, "Project not found");
+
+  // Fetch task details
+  const task = await tableTask.findById(taskId).exec();
+  if (!task) throw new ApiError(404, "Task not found");
+
+  // Validate status & priority if provided
+  const validStatuses = ["todo", "in-progress", "done"];
+  const validPriorities = ["low", "medium", "high", "critical"];
+
+  if (status && !validStatuses.includes(status)) {
+    throw new ApiError(400, `Invalid status. Valid options: ${validStatuses.join(", ")}`);
+  }
+  if (priority && !validPriorities.includes(priority)) {
+    throw new ApiError(400, `Invalid priority. Valid options: ${validPriorities.join(", ")}`);
+  }
+
+  // Validate due date
+  if (dueDate && new Date(dueDate) < new Date()) {
+      throw new ApiError(400, "Due date cannot be in the past")
+  }
+
+  // if assignedTo is provided, validate it
+  if (assignedTo) {
+    const member = await projectMember.findOne({
+        project: projectId,
+        user: assignedTo
+    })
+    if(!member){
+        throw new ApiError(404, "this user is not a member of the project")
+    }
+  }
+
+  // Update fields (only update what was sent in the request body)
+  if (title !== undefined) task.title = title;
+  if (description !== undefined) task.description = description;
+  if (assignedTo !== undefined) task.assignedTo = assignedTo;
+  if (status !== undefined) task.status = status;
+  if (priority !== undefined) task.priority = priority;
+  if (dueDate !== undefined) task.dueDate = dueDate;
+  if (actualHours !== undefined) task.actualHours = actualHours;
+  if (tags !== undefined) task.tags = tags;
+
+  // if status changed to "done", set completedAt
+  if (status === "done" && task.status !== "done") {
+    task.completedAt = new Date();
+  }
+
+  // if status changed from "done" to something else, clear completedAt
+  if (status !== "done" && task.status === "done") {
+    task.completedAt = null;
+  }
+
+  // Save updated task
+  await task.save();
+
+  // Update project metadata (lastActivity)
+  await projectTable.findByIdAndUpdate(projectId, {
+    $set: { "metadata.lastActivity": new Date() }
+  }).exec()
+
+  return res.status(200).json(
+    new ApiResponse(200, task, "Task updated successfully")
+  );
+
+
+})
