@@ -319,3 +319,39 @@ export const updateTask = asyncHandler(async (req, res) => {
 
 
 })
+
+
+
+
+
+
+export const deleteTask = asyncHandler(async (req, res) => {
+  const { projectId, taskId } = req.params
+
+  // Verify project exists
+  const project = await projectTable.findById(projectId);
+  if (!project) throw new ApiError(404, "Project not found");
+
+  // Fetch task details
+  const task = await tableTask.findById(taskId).exec();
+  if (!task) throw new ApiError(404, "Task not found");
+
+  // only admin can delete task
+  if(req.membership.role !== "admin"){
+      throw new ApiError(403, "You are not an admin of this project")
+  }
+
+  // delete task
+  await tableTask.deleteOne({ _id: taskId })
+
+  // Update project metadata
+  await projectTable.findByIdAndUpdate(projectId, {
+    $inc: { "metadata.totalTasks": -1 },
+    $set: { "metadata.lastActivity": new Date() }
+  }).exec()
+
+  // Return response
+  return res.status(200).json(
+    new ApiResponse(200, {}, "Task deleted successfully")
+  );
+})

@@ -1,7 +1,7 @@
 import express from "express"
 import { verifyJWT } from "../middlewares/auth.middleware.js"
 import { requireProjectAdmin, requireProjectMember } from "../middlewares/project.middleware.js"
-import { createTask, listTask, getTaskDetails, updateTask } from "../controllers/task.controllers.js"
+import { createTask, listTask, getTaskDetails, updateTask, deleteTask } from "../controllers/task.controllers.js"
 
 
 const router = express.Router()
@@ -18,6 +18,7 @@ router.route("/:projectId/:taskId").all(requireProjectMember).get(getTaskDetails
 
 router.route("/:projectId/:taskId").all(requireProjectMember, requireProjectAdmin).put(updateTask)
 
+router.route("/:projectId/:taskId").all(requireProjectMember, requireProjectAdmin).delete(deleteTask)
 
 
 
