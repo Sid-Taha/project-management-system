@@ -10,15 +10,15 @@ const router = express.Router()
 router.use(verifyJWT) // checking your login status
 
 
-router.route("/:projectId").all(requireProjectMember, requireProjectAdmin).post(createTask)
+router.route("/:projectId").all(requireProjectMember, requireProjectAdmin).post(createTask) // create task
 
-router.route("/:projectId").all(requireProjectMember).get(listTask)
+router.route("/:projectId").all(requireProjectMember).get(listTask) // list all task
 
-router.route("/:projectId/:taskId").all(requireProjectMember).get(getTaskDetails)
+router.route("/:projectId/:taskId").all(requireProjectMember).get(getTaskDetails) // get task details
 
-router.route("/:projectId/:taskId").all(requireProjectMember, requireProjectAdmin).put(updateTask)
+router.route("/:projectId/:taskId").all(requireProjectMember, requireProjectAdmin).put(updateTask) // update task
 
-router.route("/:projectId/:taskId").all(requireProjectMember, requireProjectAdmin).delete(deleteTask)
+router.route("/:projectId/:taskId").all(requireProjectMember, requireProjectAdmin).delete(deleteTask) // delete task (only admin can delete task)
 
 
 
