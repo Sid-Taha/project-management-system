@@ -7,6 +7,7 @@ import projectRouter from "./routes/projects.routes.js"
 import cookieParser from "cookie-parser";
 import projectMemberRouter from "./routes/projectMembers.routes.js"
 import taskRouter from "./routes/task.routes.js"
+import subTaskRouter from "./routes/subtask.routes.js"
 
 const app = express()
 
@@ -38,5 +39,6 @@ app.use("/api/v1/auth", authRouter)
 app.use("/api/v1/project", projectRouter)
 app.use("/api/v1/projects", projectMemberRouter)
 app.use("/api/v1/tasks", taskRouter)
+app.use("/api/v1/tasks", subTaskRouter)
 
 export default app
