@@ -8,6 +8,7 @@ import cookieParser from "cookie-parser";
 import projectMemberRouter from "./routes/projectMembers.routes.js"
 import taskRouter from "./routes/task.routes.js"
 import subTaskRouter from "./routes/subtask.routes.js"
+import noteRouter from "./routes/note.routes.js"
 
 const app = express()
 
@@ -40,5 +41,6 @@ app.use("/api/v1/project", projectRouter)
 app.use("/api/v1/projects", projectMemberRouter)
 app.use("/api/v1/tasks", taskRouter)
 app.use("/api/v1/tasks", subTaskRouter)
+app.use("/api/v1/notes", noteRouter)
 
 export default app
