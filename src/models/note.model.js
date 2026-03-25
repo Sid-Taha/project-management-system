@@ -62,6 +62,7 @@ const noteSchema = new Schema({
     },
     
     versionHistory: [ versionSchema ]
+    
 
 }, {timestamps: true})
 
