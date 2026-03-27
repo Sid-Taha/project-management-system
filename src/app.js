@@ -42,5 +42,6 @@ app.use("/api/v1/projects", projectMemberRouter)
 app.use("/api/v1/tasks", taskRouter)
 app.use("/api/v1/tasks", subTaskRouter)
 app.use("/api/v1/notes", noteRouter)
+app.use("/api/v1/ai", aiRouter)
 
 export default app
