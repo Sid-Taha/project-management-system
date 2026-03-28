@@ -9,6 +9,7 @@ import projectMemberRouter from "./routes/projectMembers.routes.js"
 import taskRouter from "./routes/task.routes.js"
 import subTaskRouter from "./routes/subtask.routes.js"
 import noteRouter from "./routes/note.routes.js"
+import aiRouter from "./routes/ai.routes.js"
 
 const app = express()
 

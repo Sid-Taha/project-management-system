@@ -7,7 +7,6 @@ import jwt from "jsonwebtoken"
 export const verifyJWT = asyncHandler(async (req, res, next) => {
     // getting client token from cookies
     const token = req.cookies?.accessToken 
-
     // if token is not present, throw error
     if(!token){
         throw new ApiError(401, "Access token is missing")
@@ -27,6 +26,7 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
 
         // attach user to request object
         req.user = user
+
         next() // proceed to api function
     } catch (error) {
         throw new ApiError(401, "Invalid or expired access token")
