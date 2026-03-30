@@ -187,3 +187,120 @@ export const analyzeRisks = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, {...result, metaData}, "Project risk analysis generated successfully"))
 
 })
+
+
+
+
+
+
+export const predictTimeline = asyncHandler(async (req, res) => {
+    const {projectId} = req.params
+    if(!projectId) return res.status(400).json({ error: "Project ID is required" })
+
+    const project = await projectTable.findById(projectId)
+    if(!project) return res.status(404).json({ error: "Project not found" })
+
+    const tasks = await tableTask.find({project: projectId}).select("title status priority dueDate estimatedHours")
+
+    const sysPrompt = `you are a project timeline prediction AI assistant.
+    Analyze task data and predict realistic timeline for project completion.
+    Always respond in JSON format only.`
+
+    const usrPrompt = `
+    project name: ${project.name}
+    created: ${project.createdAt}
+
+    Task details:
+    - Total: ${tasks.length}
+    - Todo: ${tasks.filter(t => t.status === "todo").length}
+    - In-progress: ${tasks.filter(t => t.status === "in-progress").length}
+    - Done: ${tasks.filter(t => t.status === "done").length}
+
+    Estimated hours remaining: ${tasks.filter(t => t.status !== "done").reduce((sum, t) => sum + (t.estimatedHours || 0), 0)}
+
+    overdue tasks: ${tasks.filter(t => t.dueDate < new Date() && t.status !== "done").length}
+
+    respond with this exact JSON format:
+    {
+       "predictedCompletionDate": "ISO date format",
+       "confidence": 0.0 to 1.0,
+       "estimatedDaysRemaining": number,
+       "scenarios": {
+            "optimistic": "ISO date format",
+            "realistic": "ISO date format",
+            "pessimistic": "ISO date format"
+        },
+        "bottlenecks": ["bottleneck1", "bottleneck2", ...],
+        "recommendations": ["recommendation1", "recommendation2", ...],
+        "summary": "detailed summary of the timeline prediction and reasoning"
+    }
+`
+
+    const startTime = Date.now()
+    const {result, metaData} = await askAI(sysPrompt, usrPrompt)
+    metaData.processingTime = Date.now() - startTime
+
+    return res.status(200).json(new ApiResponse(200, {...result, metaData}, "Project timeline prediction generated successfully"))
+})
+
+
+
+
+
+export const balanceWorkload = asyncHandler(async (req, res) => {
+    const {projectId} = req.params
+    if(!projectId) return res.status(400).json({ error: "Project ID is required" })
+
+    const project = await projectTable.findById(projectId)
+    if(!project) return res.status(404).json({ error: "Project not found" })
+
+    const members = await projectMember.find({project: projectId})
+
+    // calculate workload for each member
+    const workloads = await Promise.all(members.map(async (m)=>{
+        const tasks = await tableTask.find({project: projectId, assignedTo: m.user._id, status: {$ne: "done"}}).select("title status priority")
+
+        return {username: m.user.username, activeTasks: tasks.length, tasks: tasks.map(t => ({title: t.title, status: t.status, priority: t.priority}))}
+    }
+    ))
+
+    // get unassigned tasks
+    const unassignedTasks = await tableTask.find({project: projectId, assignedTo: null, status: {$ne: "done"}}).select("title status priority")
+
+    const sysPrompt = `you are a project workload balancing AI assistant.
+    Analyze team workload and suggest optimal task assignments to balance the workload.
+    Always respond in JSON format only.`
+
+    const usrPrompt = `
+    project name: ${project.name}
+
+    team members and their workloads:
+    ${workloads.map(w => `- ${w.username}: ${w.activeTasks} active tasks (${w.tasks.map(t => `${t.title} [${t.status}, ${t.priority}]`).join(", ")})`).join("\n")}
+
+    unassigned tasks:
+    ${unassignedTasks.map(t => `- ${t.title} [${t.status}, ${t.priority}]`).join("\n")}
+
+    respond with this exact JSON format:
+    {
+        isBalanced: true/false,
+        teamAverage: number,
+        overLoadedMembers: ["username1", "username2", ...],
+        underLoadedMembers: ["username1", "username2", ...],
+        suggestions: [
+            {
+                action: "assign/reassign",
+                task: "task title",
+                fromMember: "username or unassigned",
+                toMember: "username or unassigned",
+                reasoning: "detailed reasoning for this suggestion"
+            }
+        ],
+        summary: "overall summary of the workload balance and suggestions"
+    }`
+
+    const startTime = Date.now()
+    const {result, metaData} = await askAI(sysPrompt, usrPrompt)
+    metaData.processingTime = Date.now() - startTime
+
+    return res.status(200).json(new ApiResponse(200, {...result, metaData}, "Workload balance analysis generated successfully"))
+})
