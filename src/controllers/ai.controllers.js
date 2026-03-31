@@ -304,3 +304,177 @@ export const balanceWorkload = asyncHandler(async (req, res) => {
 
     return res.status(200).json(new ApiResponse(200, {...result, metaData}, "Workload balance analysis generated successfully"))
 })
+
+
+
+
+
+
+export const smartAssignTask = asyncHandler(async (req, res) => {
+    const {taskId} = req.params
+    if(!taskId) return res.status(400).json({ error: "Task ID is required" })
+
+    const task = await tableTask.findById(taskId).populate("project")
+    if(!task) return res.status(404).json({ error: "Task not found" })
+
+    const members = await projectMember.find({project: task.project._id})
+
+    const {considerWorkload = true, considerSkills = true} = req.body
+
+    // get workload for each member
+    const workloads = await Promise.all(members.map(async (m)=>{
+        
+        const count = await tableTask.countDocuments({
+            project: task.project._id,
+            assignedTo: m.user._id,
+            status: {$ne: "done"}
+        })
+
+        return {
+            username: m.user.username,
+            userId: m.user._id,
+            fullName: m.user.fullName,
+            activeTasks: count,
+            role: m.role
+        }
+    }))
+
+    const sysPrompt = `you are a smart task assignment AI assistant.
+    Your job is to suggest the best team member to assign a task to, based on their current workload and role.
+    Always respond in JSON format only.`
+
+    const usrPrompt = `
+    project name: ${task.project.name}
+    task title: ${task.title}
+    task description: ${task.description}
+    task priority: ${task.priority}
+    estimated hours: ${task.estimatedHours}
+
+
+    team members and their workloads:
+    ${workloads.map(w => `- ${w.username} (${w.fullName}), role: ${w.role}, active tasks: ${w.activeTasks}`).join("\n")}
+
+    consider workload: ${considerWorkload}
+    consider skills/roles: ${considerSkills}
+
+    respond with this exact JSON format:
+    {
+        recommendations: [
+            {
+                userId: "user id",
+                username: "username",
+                fullName: "full name",
+                score: 0.0 to 1.0, 
+                reasoning: ["reason1", "reason2", ...],
+                estimatedTimeToComplete: "ISO date string",
+                riskFactor: ["risk1", "risk2", ...]
+            }
+        ],
+        summary: "overall summary of the assignment recommendations and reasoning"
+    }
+    `
+
+    const startTime = Date.now()
+    const {result, metaData} = await askAI(sysPrompt, usrPrompt)
+    metaData.processingTime = Date.now() - startTime
+
+    return res.status(200).json(new ApiResponse(200, {...result, metaData}, "Smart task assignment generated successfully"))
+})
+
+
+
+
+
+export const prioritizeTask = asyncHandler(async (req, res) => {
+    const {taskId} = req.params
+    if(!taskId) return res.status(400).json({ error: "Task ID is required" })
+
+    const task = await tableTask.findById(taskId).populate("project")
+    if(!task) return res.status(404).json({ error: "Task not found" })
+
+    // get other task in project for context
+    const projectTasks = await tableTask.find({project: task.project._id}).select("title priority status dueDate")
+
+    const sysPrompt = `you are a task prioritization AI assistant.
+    Your job is to suggest the priority of a task based on its details and the context of other tasks in the project.
+    Always respond in JSON format only.`
+
+    const usrPrompt = `
+    project name: ${task.project.name}
+    task title: ${task.title}
+    task description: ${task.description}
+    current priority: ${task.priority}
+    task status: ${task.status}
+    due date: ${task.dueDate.toDateString()}
+    estimated hours: ${task.estimatedHours}
+
+    other tasks in the project:
+    ${projectTasks.map(t => `- ${t.title} [${t.status}, ${t.priority}, due: ${t.dueDate.toDateString()}]`).join("\n")}
+
+    respond with this exact JSON format:
+    {
+        currentPriority: "current priority",
+        suggestedPriority: "low/medium/high/critical",
+        shouldChanged: true/false,
+        confidence: 0.0 to 1.0,
+        reasoning: ["reason1", "reason2", ...],
+        urgencyFactors: ["factor1", "factor2", ...],
+        importantFactors: ["factor1", "factor2", ...],
+        summary: "overall summary of the prioritization recommendation and reasoning"
+    }
+    `
+
+    const startTime = Date.now()
+    const {result, metaData} = await askAI(sysPrompt, usrPrompt)
+    metaData.processingTime = Date.now() - startTime
+    
+    return res.status(200).json(new ApiResponse(200, {...result, metaData}, "Task prioritization generated successfully"))
+})
+
+
+
+
+
+export const summarizeMeeting = asyncHandler(async (req, res) => {
+    const {notes, projectId, meetingDate} = req.body
+
+    if(!notes || !projectId || !meetingDate) return res.status(400).json({ error: "Notes, project ID and meeting date are required" })
+
+    const project = await projectTable.findById(projectId)
+    if(!project) return res.status(404).json({ error: "Project not found" })
+
+    const sysPrompt = `you are a meeting summarization AI assistant.
+    Your job is to summarize the meeting notes into key points, decisions made, action items with assignees and deadlines, and overall summary.
+    Always respond in JSON format only.`
+
+    const usrPrompt = `
+    project name: ${project.name}
+    meeting date: ${new Date(meetingDate).toDateString()}
+    meeting notes:
+    ${notes}
+
+    respond with this exact JSON format:
+    {
+        "summary": "overall summary of the meeting",
+        "keyPoints": ["key point 1", "key point 2", ...],
+        "actionItems": [
+            {
+                task: "action item description",
+                assignee: "assignee name",
+                dueDate: "ISO date string",
+                priority: "low/medium/high/critical",
+                reasoning: ["reason1", "reason2", ...]
+            }
+        ],
+        "blockers": ["blocker1", "blocker2", ...],
+        "nextSteps": ["next step 1", "next step 2", ...],
+        "followUpDueDate": "ISO date format"
+    }
+    ` 
+
+    const startTime = Date.now()
+    const {result, metaData} = await askAI(sysPrompt, usrPrompt)
+    metaData.processingTime = Date.now() - startTime
+
+    return res.status(200).json(new ApiResponse(200, {...result, metaData}, "Meeting summarization generated successfully"))
+}) 
