@@ -33,6 +33,8 @@
     "mailgen": "^2.0.32",
     "mongoose": "^9.0.2",
     "nodemailer": "^7.0.12",
-    "openai": "^6.32.0"
+    "openai": "^6.32.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
   }
 }

@@ -51,7 +51,8 @@ const userSchema = new Schema({
     },
     emailVerificationTokenExpiry: {
         type: Date,
-    }
+    },
+    googleId: { type: String, default: null },
 }, {timestamps: true})
 
 

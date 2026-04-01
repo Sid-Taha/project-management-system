@@ -351,7 +351,7 @@ const resetForgotPassword = asyncHandler(async (req, res) => {
     
     const {resetToken} =  req.params // resetToken = unHashedToken
 
-    const newPassword = "thisIsNewPassword123" // req.body
+    const {newPassword} =  req.body
 
     // if token is not present, throw error
     if(!resetToken){
