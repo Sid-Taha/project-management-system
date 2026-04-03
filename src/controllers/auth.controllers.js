@@ -423,6 +423,29 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 });
 
 
+
+export const cbFunction = async (req, res)=>{
+    const user = req.user
+    const accessToken = user.generateAccessToken()
+    const refreshToken = user.generateRefreshToken()
+
+    user.refreshToken =  refreshToken
+    await user.save({validateBeforeSave: false})
+
+    const options = {httpOnly: true, secure: true}
+
+    return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(new ApiResponse(200, {user: user, accessToken, refreshToken}, "Google login successful"))
+}
+
+
+
+
+
+
 export {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken, forgetPasswordRequest, resetForgotPassword, changeCurrentPassword}
 
 

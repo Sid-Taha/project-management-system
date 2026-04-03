@@ -9,12 +9,14 @@ dotenv.config()
 
 passport.use(
     new GoogleStrategy(
+    // 1st parameter google console credentials
     {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
         callbackURL: process.env.GOOGLE_CALLBACK_URL
     },
     
+    // 2nd parameter the function which you want to run after "OAuth consent screen"
     async (accessToken, refreshToken, profile, done) => {
         try {
             // check if user already exists in database
@@ -55,9 +57,7 @@ passport.use(
         }
 
     }
+))
 
 
-
-
-)
-)
+export default passport

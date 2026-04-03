@@ -5,13 +5,10 @@ import crypto from "crypto";
 
 const userSchema = new Schema({
     avatar: {
-        type: {
-            url : String,
-        },
-        default: {
-            url : "https://placehold.co/200x200",
-        }
+        type: String, 
+        default: null
     },
+
     username: {
         type: String,
         required: true,

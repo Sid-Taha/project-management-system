@@ -3,6 +3,7 @@ import { asyncHandler } from "../utils/async-handler.js";
 import {userTable} from "../models/user.models.js"
 import {ApiError} from "../utils/api-error.js"
 import jwt from "jsonwebtoken"
+import passport from "../config/passport.js";
 
 export const verifyJWT = asyncHandler(async (req, res, next) => {
     // getting client token from cookies
@@ -32,3 +33,29 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
         throw new ApiError(401, "Invalid or expired access token")
     }
 });
+
+
+
+
+
+
+export const passAuth = (req, res, next)=>{
+    
+    passport.authenticate("google", {session: false}, (err, user, info)=>{
+        console.log("❌ err", err);
+        console.log("✅ user", user);
+        console.log("✅ info", info);
+        
+        if(err || !user){
+            return res.status(401).json(
+                {
+                    message: "Goooooooooooooogle Authentication failed",
+                    error: err?.message || info
+                }
+            )
+        }
+
+        req.user = user
+        next()
+    })(req, res, next)
+}
