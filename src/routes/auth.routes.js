@@ -2,6 +2,7 @@
 import express from "express"
 import {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken, forgetPasswordRequest, resetForgotPassword, changeCurrentPassword, cbFunction}  from "../controllers/auth.controllers.js"
 import {verifyJWT, passAuth} from "../middlewares/auth.middleware.js"
+import {uploadAvatar} from "../middlewares/upload.middleware.js"
 
 const router = express.Router()
 
@@ -41,6 +42,16 @@ router.route("/google/callback").all(passAuth).get(cbFunction)
 router.route("/google/failure").get((req, res)=>{
     return res.status(401).json({message: "Google authentication failed /google/failure"})
 }) 
+
+
+
+
+
+
+
+// to update avatar
+router.route("/update-avatar").all(verifyJWT, uploadAvatar.single("avatar")).patch()
+
 
 
 export default router
