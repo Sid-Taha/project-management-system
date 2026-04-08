@@ -4,7 +4,8 @@ import { tableTask } from "../models/task.model.js"
 import {projectTable} from "../models/project.models.js"
 import { ApiResponse } from "../utils/api-response.js";
 import { ApiError } from "../utils/api-error.js";
-
+import {deleteFromS3} from "../utils/s3-delete.js"
+ 
 
 export const createTask = asyncHandler(async (req, res) => {
     // Verify project exists
@@ -19,8 +20,7 @@ export const createTask = asyncHandler(async (req, res) => {
     priority = "medium",
     dueDate,
     estimatedHours,
-    tags,
-    attachments
+    tags
     } = req.body
 
     // if title is not provided, throw error
@@ -62,6 +62,16 @@ export const createTask = asyncHandler(async (req, res) => {
     if (priority && !validPriorities.includes(priority)) {
         throw new ApiError(400, `Invalid priority. Valid options are: ${validPriorities.join(", ")}`)
     }
+
+    // handle attachments from s3 bucket
+    const attachments = req.files?.map((file) => ({
+      url: file.location,
+      filename: file.orignalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      uploadedBy: req.user._id
+    }))
+
 
 
     // Create task
@@ -339,6 +349,12 @@ export const deleteTask = asyncHandler(async (req, res) => {
   // only admin can delete task
   if(req.membership.role !== "admin"){
       throw new ApiError(403, "You are not an admin of this project")
+  }
+
+  if(task.attachments.length > 0) {
+    await Promise.all(
+      task.attachments.map(file => deleteFromS3(file.url))
+    )
   }
 
   // delete task

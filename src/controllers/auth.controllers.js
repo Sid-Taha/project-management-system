@@ -445,6 +445,22 @@ export const cbFunction = async (req, res)=>{
 
 
 
+export const updateAvatar = async (req, res)=>{
+    if(!req.file) throw new ApiError(400, "avatar file is required")
+
+    const user = await userTable.findByIdAndUpdate(
+        req.user._id, 
+        {avatar: req.file.location}, //s3 url
+        {new: true}
+    ).select("-password -refreshToken")
+
+    return res.status(200).json(new ApiResponse(200, user, "avatar updated successfully"))
+    
+}
+
+
+
+
 
 export {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken, forgetPasswordRequest, resetForgotPassword, changeCurrentPassword}
 

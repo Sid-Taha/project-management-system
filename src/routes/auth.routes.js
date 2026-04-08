@@ -1,6 +1,6 @@
 // src\routes\auth.routes.js
 import express from "express"
-import {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken, forgetPasswordRequest, resetForgotPassword, changeCurrentPassword, cbFunction}  from "../controllers/auth.controllers.js"
+import {registerUser, login, verifyEmail, logoutUser, resendEmailVerification, getCurrentUser, refreshAccessToken, forgetPasswordRequest, resetForgotPassword, changeCurrentPassword, cbFunction, updateAvatar}  from "../controllers/auth.controllers.js"
 import {verifyJWT, passAuth} from "../middlewares/auth.middleware.js"
 import {uploadAvatar} from "../middlewares/upload.middleware.js"
 
@@ -50,7 +50,7 @@ router.route("/google/failure").get((req, res)=>{
 
 
 // to update avatar
-router.route("/update-avatar").all(verifyJWT, uploadAvatar.single("avatar")).patch()
+router.route("/update-avatar").all(verifyJWT, uploadAvatar.single("avatar")).patch(updateAvatar)
 
 
 
