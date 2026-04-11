@@ -2,12 +2,13 @@ import express from 'express';
 import {verifyJWT} from "../middlewares/auth.middleware.js"
 import {createNote, listNotes, updateNote, deleteNote} from "../controllers/note.controllers.js"
 import {requireProjectMember} from "../middlewares/project.middleware.js"
+import {uploadNoteAttachments} from "../middlewares/upload.middleware.js"
 
 const router = express.Router();
 
 router.use(verifyJWT)
 
-router.route("/:projectId").all(requireProjectMember).post(createNote)
+router.route("/:projectId").all(requireProjectMember, uploadNoteAttachments.array("attachments", 10)).post(createNote)
 
 router.route("/:projectId").all(requireProjectMember).get(listNotes)
 

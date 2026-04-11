@@ -61,6 +61,19 @@ const noteSchema = new Schema({
         default: 1
     },
     
+    attachments: [{
+        filename: {
+            type: String,
+            trim: true,
+            maxlength: [200, "Filename must be less than 200 characters"]
+        },
+        path: {
+            type: String,
+            trim: true,
+            maxlength: [500, "Path must be less than 500 characters"]
+        }
+    }],
+    
     versionHistory: [ versionSchema ]
     
 

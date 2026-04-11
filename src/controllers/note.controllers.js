@@ -3,6 +3,7 @@ import {ApiError} from "../utils/api-error.js"
 import {projectTable} from "../models/project.models.js"
 import {noteTable} from "../models/note.model.js"
 import {ApiResponse} from "../utils/api-response.js"
+import {deleteFromS3} from "../utils/s3-delete.js"
 
  
  
@@ -17,6 +18,15 @@ import {ApiResponse} from "../utils/api-response.js"
     const project = await projectTable.findById(projectId)
     if(!project) throw new ApiError(404, "Project not found")
 
+   // handle attachments from s3 bucket
+   const attachments = req.files?.map((file) => ({
+   url: file.location,
+   filename: file.orignalname,
+   mimetype: file.mimetype,
+   size: file.size,
+   uploadedBy: req.user._id
+   }))      
+
     const note = await noteTable.create({
         title: title,
         content: content,
@@ -24,6 +34,7 @@ import {ApiResponse} from "../utils/api-response.js"
         createdBy: req.user._id,
         tags: tags || [],
         isPinned: isPinned || false,
+        attachments: attachments || []
     })
 
     return res.status(201).json(new ApiResponse(201, note, "Note created successfully"))
@@ -123,7 +134,13 @@ export const deleteNote = asyncHandler(async (req, res) => {
 // skipped
 
 // ---------------------------  4. database manipulation (according to schema)  ---------------------------
-   await noteTable.findByIdAndDelete(noteId)
+if(note.attachments.length > 0) {
+   await Promise.all(
+   note.attachments.map(file => deleteFromS3(file.url))
+   )
+}
+
+await noteTable.findByIdAndDelete(noteId)
 
 // ---------------------------  5. Response   ---------------------------
    return res.status(200).json(new ApiResponse(200, null, "Note deleted successfully"))

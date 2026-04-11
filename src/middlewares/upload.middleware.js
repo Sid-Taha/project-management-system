@@ -74,3 +74,30 @@ export const uploadTaskAttachments = multer({
         }
     },
 })
+
+
+
+
+
+
+
+export const uploadNoteAttachments = multer({
+    storage: multerS3({
+        s3: s3_Client,
+        bucket: process.env.AWS_S3_BUCKET_NAME,
+        contentType: multerS3.AUTO_CONTENT_TYPE,
+        key: (req, file, cb)=>{
+            const noteId = req.param.noteId || "new"
+            const timestamp = Date.now()
+            const filename = `note-${noteId}/${timestamp}-${file.originalname}`
+            cb(null, filename)
+        } 
+    }),
+    fileFilter: (req, file, cb)=>{
+        if(allowedMimeTypes.includes(file.mimetype)){
+            cb(null, true)
+        }else{
+            cb(new Error("File type not allowed", false))
+        }
+    },
+})
